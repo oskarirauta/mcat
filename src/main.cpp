@@ -3,8 +3,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cerrno>
+#include <cstring>
+#include <cstdlib>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include "usage.hpp"
 #include "ansi.hpp"
@@ -18,15 +22,27 @@ static int term_rows() {
 	return 24;
 }
 
-static bool read_file(const std::string& path, std::string& out) {
+static bool read_file(const std::string& path, std::string& out, std::string& err) {
 	if ( path == "-" ) {
 		std::ostringstream ss;
 		ss << std::cin.rdbuf();
 		out = ss.str();
 		return true;
 	}
+
+	struct stat st;
+	if ( stat(path.c_str(), &st) != 0 ) {
+		err = std::strerror(errno);
+		return false;
+	}
+	if ( S_ISDIR(st.st_mode)) { err = "is a directory"; return false; }
+	if ( !S_ISREG(st.st_mode) && !S_ISLNK(st.st_mode) && !S_ISFIFO(st.st_mode)) {
+		err = "not a regular file";
+		return false;
+	}
+
 	std::ifstream f(path, std::ios::binary);
-	if ( !f ) return false;
+	if ( !f ) { err = std::strerror(errno); return false; }
 	std::ostringstream ss;
 	ss << f.rdbuf();
 	out = ss.str();
@@ -62,7 +78,9 @@ int main(int argc, char **argv) {
 			{ "numbers", { .key = "n", .word = "number", .desc = "show line numbers" }},
 			{ "browser", { .key = "b", .word = "browser", .desc = "always use the browser (pager)" }},
 			{ "nopager", { .key = "p", .word = "no-pager", .desc = "disable the browser: print everything and exit" }},
-			{ "nocolor", { .key = "C", .word = "no-color", .desc = "disable colours" }},
+			{ "nocolor", { .key = "C", .word = "no-color", .desc = "disable colours (same as --color=never)" }},
+			{ "color", { .key = "c", .word = "color", .desc = "when to colour: auto|always|never (default auto)",
+				.flag = usage_t::REQUIRED, .name = "when" }},
 			{ "raw", { .key = "r", .word = "raw", .desc = "json: don't reformat, colour the file as-is" }},
 			{ "type", { .key = "t", .word = "type", .desc = "force type: json|md|config|cpp|sh|diff|text",
 				.flag = usage_t::REQUIRED, .name = "type" }},
@@ -102,10 +120,23 @@ int main(int argc, char **argv) {
 
 	bool tty_out = isatty(STDOUT_FILENO);
 
+	// colour policy: --color=auto|always|never (default auto), -C == never,
+	// and the NO_COLOR env var disables colour in auto mode.
+	std::string cwhen = usage["color"] ? (std::string)usage["color"] : "auto";
+	if ( usage["nocolor"] ) cwhen = "never";
+	if ( cwhen != "auto" && cwhen != "always" && cwhen != "never" ) {
+		std::cerr << "mcat: invalid --color value '" << cwhen << "' (use auto|always|never)" << std::endl;
+		return 1;
+	}
+	const char* nocolor_env = std::getenv("NO_COLOR");
+	bool no_color = nocolor_env && nocolor_env[0] != '\0';
+
 	mcat::options_t opts;
 	opts.numbers = (bool)usage["numbers"];
 	opts.force_pager = (bool)usage["browser"];
-	opts.color = ( tty_out || opts.force_pager ) && !usage["nocolor"];
+	if ( cwhen == "always" ) opts.color = true;
+	else if ( cwhen == "never" ) opts.color = false;
+	else opts.color = ( tty_out || opts.force_pager ) && !no_color; // auto
 	opts.paging = !usage["nopager"] && ( tty_out || opts.force_pager );
 	if ( usage["tab"] ) opts.tabstop = (int)usage["tab"].intValue();
 	opts.json_reformat = !usage["raw"];
@@ -121,9 +152,10 @@ int main(int argc, char **argv) {
 
 		const std::string& path = files[fi];
 		std::string data;
+		std::string err;
 
-		if ( !read_file(path, data)) {
-			std::cerr << "mcat: " << path << ": cannot open file" << std::endl;
+		if ( !read_file(path, data, err)) {
+			std::cerr << "mcat: " << path << ": " << err << std::endl;
 			rc = 1;
 			continue;
 		}

@@ -1,3 +1,5 @@
+#include <cctype>
+#include <utility>
 #include "mcat.hpp"
 
 namespace mcat {
@@ -198,6 +200,53 @@ namespace mcat {
 				continue;
 			}
 			out += s[i];
+		}
+		return out;
+	}
+
+	// Wrap every (case-insensitive) occurrence of query_lower in reverse video,
+	// without disturbing the line's existing colours: we use SGR 7 (reverse on)
+	// and 27 (reverse off) rather than a full reset, and map match positions
+	// from the plain text back onto the original ANSI byte offsets.
+	std::string highlight_matches(const std::string& s, const std::string& query_lower) {
+
+		if ( query_lower.empty()) return s;
+
+		std::string plain, low;
+		std::vector<size_t> at;   // byte offset in s for each plain char
+		at.reserve(s.size());
+
+		for ( size_t i = 0; i < s.size(); i++ ) {
+			if ( s[i] == '\033' ) {
+				i++;
+				if ( i < s.size() && s[i] == '[' ) {
+					i++;
+					while ( i < s.size() && !( s[i] >= 0x40 && s[i] <= 0x7e )) i++;
+				}
+				continue;
+			}
+			at.push_back(i);
+			plain += s[i];
+			low += (char)std::tolower((unsigned char)s[i]);
+		}
+
+		// collect insertion points: (byte offset, text)
+		std::vector<std::pair<size_t, const char*>> ins;
+		size_t pos = 0;
+		while (( pos = low.find(query_lower, pos)) != std::string::npos ) {
+			size_t endp = pos + query_lower.size();
+			ins.push_back({ at[pos], "\033[7m" });
+			ins.push_back({ endp < at.size() ? at[endp] : s.size(), "\033[27m" });
+			pos = endp;
+		}
+		if ( ins.empty()) return s;
+
+		std::string out;
+		out.reserve(s.size() + ins.size() * 5);
+		size_t k = 0;
+		for ( size_t i = 0; i <= s.size(); i++ ) {
+			while ( k < ins.size() && ins[k].first == i ) { out += ins[k].second; k++; }
+			if ( i < s.size()) out += s[i];
 		}
 		return out;
 	}

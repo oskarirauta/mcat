@@ -175,8 +175,11 @@ namespace mcat {
 			for ( int r = 0; r < height; r++ ) {
 				int idx = top + r;
 				buf += "\033[K"; // clear line
-				if ( idx < total )
-					buf += clip_visible_range(lines[idx], (size_t)hoff, (size_t)cols);
+				if ( idx < total ) {
+					const std::string& raw = lines[idx];
+					std::string shown = query.empty() ? raw : highlight_matches(raw, query);
+					buf += clip_visible_range(shown, (size_t)hoff, (size_t)cols);
+				}
 				buf += "\r\n";
 			}
 

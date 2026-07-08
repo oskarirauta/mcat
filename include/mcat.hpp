@@ -47,6 +47,7 @@ namespace mcat {
 	std::string clip_visible(const std::string& s, size_t maxw); // truncate to width, keep escapes
 	std::string clip_visible_range(const std::string& s, size_t start, size_t width); // horizontal window
 	std::string plain_text(const std::string& s);        // strip ANSI escapes (for searching)
+	std::string highlight_matches(const std::string& s, const std::string& query_lower); // reverse-video matches
 	std::string expand_tabs(const std::string& line, int tabstop);
 	std::string expand_tabs_data(const std::string& data, int tabstop); // whole text, resets per line
 	std::vector<std::string> split_lines(const std::string& data);

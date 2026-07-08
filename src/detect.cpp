@@ -61,8 +61,19 @@ namespace mcat {
 		for ( int i = 0; cfg_names[i]; i++ )
 			if ( base == cfg_names[i] ) return filetype::CONFIG;
 
+		static const char* sh_names[] = {
+			".bashrc", ".bash_profile", ".bash_login", ".bash_logout",
+			".profile", ".zshrc", ".zprofile", ".kshrc", nullptr };
+		for ( int i = 0; sh_names[i]; i++ )
+			if ( base == sh_names[i] ) return filetype::SHELL;
+
 		if ( ext == "json" ) return filetype::JSON;
 		if ( ext == "md" || ext == "markdown" ) return filetype::MARKDOWN;
+
+		if ( ext == "sh" || ext == "bash" || ext == "zsh" || ext == "ksh" ||
+			ext == "bashrc" ) return filetype::SHELL;
+
+		if ( ext == "diff" || ext == "patch" ) return filetype::DIFF;
 
 		if ( ext == "c" || ext == "h" || ext == "cpp" || ext == "cc" ||
 			ext == "cxx" || ext == "hpp" || ext == "hxx" || ext == "hh" ||
@@ -85,6 +96,22 @@ namespace mcat {
 		size_t i = 0;
 		while ( i < data.size() && std::isspace((unsigned char)data[i])) i++;
 		if ( i >= data.size()) return filetype::PLAIN;
+
+		// diff / patch: git header, unified/context markers or a hunk header
+		if ( data.compare(i, 11, "diff --git ") == 0 ||
+			data.compare(i, 4, "--- ") == 0 ||
+			data.compare(i, 7, "Index: ") == 0 ||
+			data.compare(i, 3, "@@ ") == 0 )
+			return filetype::DIFF;
+
+		// shebang -> shell if it names a shell
+		if ( data.compare(i, 2, "#!") == 0 ) {
+			size_t eol = data.find('\n', i);
+			std::string first = data.substr(i, eol == std::string::npos ? std::string::npos : eol - i);
+			if ( first.find("sh") != std::string::npos ||
+				first.find("bash") != std::string::npos )
+				return filetype::SHELL;
+		}
 
 		char c = data[i];
 		if ( c == '{' || c == '[' ) return filetype::JSON;

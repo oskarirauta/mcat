@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <poll.h>
+#include <cctype>
 #include <cstdio>
 #include <string>
 #include <algorithm>
@@ -91,6 +92,31 @@ namespace mcat {
 			}
 			return K_NONE;
 		}
+
+		// Read a line of text at the bottom row (for the search prompt).
+		// Returns false if the user cancelled with ESC.
+		bool prompt_line(int row, int cols, const std::string& prefix, std::string& result) {
+
+			result.clear();
+			const char* show = "\033[?25h";
+			const char* hide = "\033[?25l";
+
+			while ( true ) {
+
+				std::string shown = clip_visible(prefix + result, (size_t)cols);
+				std::string buf = "\033[" + std::to_string(row) + ";1H\033[K" +
+					ansi::reverse + shown + ansi::reset + show;
+				ssize_t w = write(STDOUT_FILENO, buf.c_str(), buf.size()); (void)w;
+
+				unsigned char c;
+				if ( read(STDIN_FILENO, &c, 1) != 1 ) { w = write(STDOUT_FILENO, hide, 6); return false; }
+
+				if ( c == '\r' || c == '\n' ) { w = write(STDOUT_FILENO, hide, 6); return true; }
+				if ( c == 27 ) { w = write(STDOUT_FILENO, hide, 6); return false; }
+				if ( c == 127 || c == 8 ) { if ( !result.empty()) result.pop_back(); continue; }
+				if ( c >= 32 && c < 127 ) result += (char)c;
+			}
+		}
 	}
 
 	void run_pager(const std::vector<std::string>& lines, const std::string& title) {
@@ -104,8 +130,32 @@ namespace mcat {
 		raw_mode();
 
 		int top = 0;
+		int hoff = 0;                 // horizontal scroll offset (columns)
 		const int total = (int)lines.size();
 		bool quit = false;
+		std::string query;            // current search term (lowercased)
+		std::string msg;              // transient status message
+
+		// widest visible line (for clamping horizontal scroll), computed once
+		size_t maxw = 0;
+		for ( auto& l : lines ) { size_t w = visible_width(l); if ( w > maxw ) maxw = w; }
+
+		auto lc = [](std::string s) {
+			for ( auto& ch : s ) ch = (char)std::tolower((unsigned char)ch);
+			return s;
+		};
+		auto matches = [&](int idx, const std::string& q) {
+			return lc(plain_text(lines[idx])).find(q) != std::string::npos;
+		};
+		// search from `start`, stepping by `dir` (+1/-1), wrapping around
+		auto find = [&](int start, int dir, const std::string& q) -> int {
+			if ( q.empty() || total == 0 ) return -1;
+			for ( int s = 0; s < total; s++ ) {
+				int idx = ((( start + dir * s ) % total ) + total ) % total;
+				if ( matches(idx, q)) return idx;
+			}
+			return -1;
+		};
 
 		while ( !quit ) {
 
@@ -116,6 +166,9 @@ namespace mcat {
 			int max_top = std::max(0, total - height);
 			if ( top > max_top ) top = max_top;
 			if ( top < 0 ) top = 0;
+			int max_hoff = (int)maxw > cols ? (int)maxw - 1 : 0;
+			if ( hoff > max_hoff ) hoff = max_hoff;
+			if ( hoff < 0 ) hoff = 0;
 
 			std::string buf = "\033[H"; // cursor home
 
@@ -123,7 +176,7 @@ namespace mcat {
 				int idx = top + r;
 				buf += "\033[K"; // clear line
 				if ( idx < total )
-					buf += clip_visible(lines[idx], (size_t)cols);
+					buf += clip_visible_range(lines[idx], (size_t)hoff, (size_t)cols);
 				buf += "\r\n";
 			}
 
@@ -136,12 +189,15 @@ namespace mcat {
 			else if ( bottom >= total ) pos = "END";
 			else { char b[8]; std::snprintf(b, sizeof(b), "%d%%", pct); pos = b; }
 
+			std::string extra;
+			if ( hoff > 0 ) extra += "  >" + std::to_string(hoff);
+			if ( !msg.empty()) extra += "  " + msg;
+			else if ( !query.empty()) extra += "  /" + query;
+
 			char st[512];
-			std::snprintf(st, sizeof(st), " %s   line %d/%d   %s   [\u2191\u2193 PgUp/Dn Space=page b=back g/G q=quit] ",
-				title.c_str(), bottom, total, pos.c_str());
-			std::string status = st;
-			status = clip_visible(status, (size_t)cols);
-			// pad to full width
+			std::snprintf(st, sizeof(st), " %s   line %d/%d   %s%s   [\u2191\u2193\u2190\u2192 Space/b /=search n/N g/G q] ",
+				title.c_str(), bottom, total, pos.c_str(), extra.c_str());
+			std::string status = clip_visible(st, (size_t)cols);
 			size_t vw = visible_width(status);
 			if ( vw < (size_t)cols ) status += std::string((size_t)cols - vw, ' ');
 
@@ -149,17 +205,45 @@ namespace mcat {
 
 			ssize_t w = write(STDOUT_FILENO, buf.c_str(), buf.size()); (void)w;
 
+			msg.clear();
 			int k = read_key();
 			switch ( k ) {
-				case K_UP:            top -= 1; break;
-				case K_DOWN:          top += 1; break;
-				case K_PGUP:          top -= height; break;
+				case K_UP:             top -= 1; break;
+				case K_DOWN:           top += 1; break;
+				case K_PGUP:           top -= height; break;
 				case K_PGDN: case ' ': top += height; break;
-				case 'b': case 'B':   top -= height; break;
+				case 'b': case 'B':    top -= height; break;
+				case K_LEFT:           hoff -= 8; break;
+				case K_RIGHT:          hoff += 8; break;
+				case '0':              hoff = 0; break;
 				case K_HOME: case 'g': top = 0; break;
 				case K_END:  case 'G': top = max_top; break;
+				case '/': {
+					std::string q;
+					if ( prompt_line(rows, cols, "/", q) && !q.empty()) {
+						query = lc(q);
+						int m = find(top, 1, query);
+						if ( m < 0 ) msg = "not found";
+						else top = m;
+					}
+					break;
+				}
+				case 'n': {
+					if ( !query.empty()) {
+						int m = find(top + 1, 1, query);
+						if ( m < 0 ) msg = "not found"; else top = m;
+					}
+					break;
+				}
+				case 'N': {
+					if ( !query.empty()) {
+						int m = find(top - 1, -1, query);
+						if ( m < 0 ) msg = "not found"; else top = m;
+					}
+					break;
+				}
 				case 'q': case 'Q': case K_ESC: quit = true; break;
-				case K_ENTER:         top += 1; break;
+				case K_ENTER:          top += 1; break;
 				default: break;
 			}
 		}

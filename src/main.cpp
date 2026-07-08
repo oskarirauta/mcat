@@ -38,6 +38,8 @@ static mcat::filetype type_from_string(const std::string& s) {
 	if ( s == "md" || s == "markdown" ) return mcat::filetype::MARKDOWN;
 	if ( s == "config" || s == "conf" || s == "ini" ) return mcat::filetype::CONFIG;
 	if ( s == "c" || s == "cpp" || s == "c++" ) return mcat::filetype::CPP;
+	if ( s == "sh" || s == "shell" || s == "bash" ) return mcat::filetype::SHELL;
+	if ( s == "diff" || s == "patch" ) return mcat::filetype::DIFF;
 	if ( s == "text" || s == "plain" ) return mcat::filetype::PLAIN;
 	return mcat::filetype::UNKNOWN;
 }
@@ -52,8 +54,9 @@ int main(int argc, char **argv) {
 			.author = "Oskari Rauta",
 			.copyright = "2026, Oskari Rauta",
 			.usage = "[options] <file>...",
-			.description = "\nmarkup-aware cat: syntax colours for json, markdown, config and c/c++,\n"
-				"binary detection, and a built-in browser (pager) for long files."
+			.description = "\nmarkup-aware cat: syntax colours for json, markdown, config, c/c++,\n"
+				"shell and diff/patch, binary detection, and a built-in browser (pager)\n"
+				"for long files."
 		},
 		.options = {
 			{ "numbers", { .key = "n", .word = "number", .desc = "show line numbers" }},
@@ -61,7 +64,7 @@ int main(int argc, char **argv) {
 			{ "nopager", { .key = "p", .word = "no-pager", .desc = "disable the browser: print everything and exit" }},
 			{ "nocolor", { .key = "C", .word = "no-color", .desc = "disable colours" }},
 			{ "raw", { .key = "r", .word = "raw", .desc = "json: don't reformat, colour the file as-is" }},
-			{ "type", { .key = "t", .word = "type", .desc = "force type: json|md|config|cpp|text",
+			{ "type", { .key = "t", .word = "type", .desc = "force type: json|md|config|cpp|sh|diff|text",
 				.flag = usage_t::REQUIRED, .name = "type" }},
 			{ "tab", { .key = "T", .word = "tab", .desc = "tab width (default 8)",
 				.flag = usage_t::REQUIRED, .name = "n", .type = usage_t::INT }},

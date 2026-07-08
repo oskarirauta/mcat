@@ -12,6 +12,8 @@ OBJS:= \
 	objs/highlight_config.o \
 	objs/highlight_markdown.o \
 	objs/highlight_cpp.o \
+	objs/highlight_shell.o \
+	objs/highlight_diff.o \
 	objs/pager.o \
 	objs/main.o
 

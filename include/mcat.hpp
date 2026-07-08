@@ -10,6 +10,8 @@ namespace mcat {
 		MARKDOWN,
 		CONFIG,
 		CPP,
+		SHELL,
+		DIFF,
 		BINARY,
 		UNKNOWN
 	};
@@ -43,6 +45,8 @@ namespace mcat {
 	// --- util.cpp ---
 	size_t visible_width(const std::string& s);          // width ignoring ANSI escapes
 	std::string clip_visible(const std::string& s, size_t maxw); // truncate to width, keep escapes
+	std::string clip_visible_range(const std::string& s, size_t start, size_t width); // horizontal window
+	std::string plain_text(const std::string& s);        // strip ANSI escapes (for searching)
 	std::string expand_tabs(const std::string& line, int tabstop);
 	std::string expand_tabs_data(const std::string& data, int tabstop); // whole text, resets per line
 	std::vector<std::string> split_lines(const std::string& data);

@@ -25,6 +25,8 @@ namespace mcat {
 	std::vector<std::string> highlight_markdown(const std::string& data, const options_t& opts);
 	std::vector<std::string> highlight_config(const std::string& data, const options_t& opts);
 	std::vector<std::string> highlight_cpp(const std::string& data, const options_t& opts);
+	std::vector<std::string> highlight_shell(const std::string& data, const options_t& opts);
+	std::vector<std::string> highlight_diff(const std::string& data, const options_t& opts);
 	std::vector<std::string> highlight_plain(const std::string& data, const options_t& opts);
 
 } // namespace mcat

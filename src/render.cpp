@@ -24,6 +24,8 @@ namespace mcat {
 				case filetype::MARKDOWN: lines = highlight_markdown(data, opts); break;
 				case filetype::CONFIG:   lines = highlight_config(data, opts); break;
 				case filetype::CPP:      lines = highlight_cpp(data, opts); break;
+				case filetype::SHELL:    lines = highlight_shell(data, opts); break;
+				case filetype::DIFF:     lines = highlight_diff(data, opts); break;
 				default:                 lines = highlight_plain(data, opts); break;
 			}
 		}

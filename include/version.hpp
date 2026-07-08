@@ -1,3 +1,3 @@
 #pragma once
 
-const std::string VERSION = "0.0.99";
+const std::string VERSION = "1.0.0";

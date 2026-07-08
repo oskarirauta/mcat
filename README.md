@@ -1,3 +1,5 @@
+[![License:MIT](https://img.shields.io/badge/License-MIT-blue?style=plastic)](LICENSE) [![CI build](https://img.shields.io/github/actions/workflow/status/oskarirauta/mcat/build.yml?style=plastic&label=build)](https://github.com/oskarirauta/mcat/actions/workflows/build.yml)
+
 # mcat
 
 Markup-aware `cat`.
